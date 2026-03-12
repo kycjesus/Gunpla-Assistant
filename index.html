@@ -590,9 +590,24 @@ function renderGradeFilters() {
 function renderKitGrid() {
   const container = document.getElementById('kitGrid');
   const gradesToShow = activeGrade === 'ALL' ? GRADE_ORDER : [activeGrade];
-  let totalShown = 0;
   let html = '';
 
+  if (activeGrade === 'ALL' && !searchQuery) {
+    // Flat grid — all kits sorted by latest release
+    let allKits = [];
+    for (const code of GRADE_ORDER) {
+      if (!CATALOGUE[code]) continue;
+      for (const k of CATALOGUE[code].kits) allKits.push({ ...k, gradeCode: code });
+    }
+    allKits.sort((a, b) => (b.y || '0').localeCompare(a.y || '0'));
+    html = `<div class="kit-grid">${allKits.map(k => renderKitCard(k, k.gradeCode)).join('')}</div>`;
+    document.getElementById('searchResultCount').innerHTML = '';
+    container.innerHTML = html;
+    return;
+  }
+
+  // Filtered view — collect matching kits across grades, still sort by year
+  let allFiltered = [];
   for (const code of gradesToShow) {
     if (!CATALOGUE[code]) continue;
     const grade = CATALOGUE[code];
@@ -603,32 +618,35 @@ function renderKitGrid() {
              code.toLowerCase().includes(searchQuery) ||
              grade.label.toLowerCase().includes(searchQuery);
     });
-    if (!filtered.length) continue;
-    totalShown += filtered.length;
-
-    html += `<div class="grade-section">
-      <div class="grade-heading">
-        <div class="grade-heading-label">
-          <span class="grade-code">${code}</span>
-          <span class="grade-name">${grade.label}</span>
-          <span class="grade-kit-count">${filtered.length} kit${filtered.length!==1?'s':''}</span>
-        </div>
-      </div>
-      <div class="kit-grid">
-        ${filtered.map(k => renderKitCard(k, code)).join('')}
-      </div>
-    </div>`;
+    for (const k of filtered) allFiltered.push({ ...k, gradeCode: code });
   }
 
-  if (!totalShown) {
+  allFiltered.sort((a, b) => (b.y || '0').localeCompare(a.y || '0'));
+
+  if (!allFiltered.length) {
     html = `<div class="no-results"><strong>No kits found</strong>Try a different search term or grade filter.</div>`;
+  } else {
+    // If filtering by a specific grade, show a heading; otherwise flat
+    if (activeGrade !== 'ALL') {
+      const grade = CATALOGUE[activeGrade];
+      html = `<div class="grade-section">
+        <div class="grade-heading">
+          <div class="grade-heading-label">
+            <span class="grade-code">${activeGrade}</span>
+            <span class="grade-name">${grade.label}</span>
+            <span class="grade-kit-count">${allFiltered.length} kit${allFiltered.length!==1?'s':''}</span>
+          </div>
+        </div>
+        <div class="kit-grid">${allFiltered.map(k => renderKitCard(k, k.gradeCode)).join('')}</div>
+      </div>`;
+    } else {
+      html = `<div class="kit-grid">${allFiltered.map(k => renderKitCard(k, k.gradeCode)).join('')}</div>`;
+    }
   }
 
   container.innerHTML = html;
   document.getElementById('searchResultCount').innerHTML =
-    searchQuery || activeGrade !== 'ALL'
-      ? `<strong>${totalShown}</strong> result${totalShown!==1?'s':''}`
-      : '';
+    `<strong>${allFiltered.length}</strong> result${allFiltered.length!==1?'s':''}`;
 }
 
 function renderKitCard(kit, gradeCode) {
